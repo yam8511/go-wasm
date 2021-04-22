@@ -32,27 +32,46 @@ license that can be found in the LICENSE file.
 			};
 		}
 
-		let wasm_bin = new ArrayBuffer()
 
-		async function download_wasm() {
-			let bin = await fetch("test.wasm").then(res => res.arrayBuffer())
-			wasm_bin = bin
+		class App {
+			constructor() {
+				this.argv = ["Hello", "World"]
+				this.env = {
+					"KEY": "abc"
+				}
+				fetch("test.wasm").
+					then(res => res.arrayBuffer()).
+					then((bin) => {
+						this.wasm_bin = bin
+						this.run()
+					})
+			}
+
+			async run() {
+				const go = new Go();
+				const { instance } = await WebAssembly.instantiate(this.wasm_bin, go.importObject)
+				document.getElementById("runButton").disabled = true;
+				console.warn("==== go run ====")
+				go.argv = this.argv
+				go.env = this.env
+				await go.run(instance);
+				console.warn("==== go exit ====")
+				document.getElementById("runButton").disabled = false;
+			}
+
+			add(a, b) {
+				return wasm.add_num(a, b)
+			}
 		}
 
-		async function run() {
-			const go = new Go();
+		let app
 
-			const { instance } = await WebAssembly.instantiate(wasm_bin, go.importObject)
-			document.getElementById("runButton").disabled = true;
-			console.warn("==== go run ====")
-			go.argv = ['hello', 'world']
-			await go.run(instance);
-			console.warn("==== go exit ====")
-			document.getElementById("runButton").disabled = false;
+		function run() {
+			app.run()
 		}
 
 		window.onload = async function () {
-			await download_wasm()
+			app = new App()
 		}
 	</script>
 </body>

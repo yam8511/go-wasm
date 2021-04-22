@@ -13,8 +13,8 @@ func getElementByID(id string) js.Value {
 	return js.Global().Get("document").Call("getElementById", id)
 }
 
-var ctx context.Context
-var stop context.CancelFunc
+var mainCtx, ctx context.Context
+var mainExit, stop context.CancelFunc
 
 func startSpin(this js.Value, args []js.Value) interface{} {
 	if ctx != nil {
@@ -23,9 +23,15 @@ func startSpin(this js.Value, args []js.Value) interface{} {
 
 	go func() {
 		log.Println("開始每秒spin")
-		ctx, stop = context.WithCancel(context.Background())
+		ctx, stop = context.WithCancel(mainCtx)
 		count := 0
 		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
 			count++
 			select {
 			case <-time.After(time.Second):
@@ -56,16 +62,35 @@ func sayHello(this js.Value, args []js.Value) interface{} {
 	return true
 }
 
-func setGlobalMethods() {
+func add(this js.Value, args []js.Value) interface{} {
+	var sum float64
+	for _, v := range args {
+		if v.IsNaN() {
+			continue
+		}
+
+		sum += v.Float()
+	}
+	return sum
+}
+
+func init() {
+	fmt.Println("init")
 	js.Global().Set("say_hello", js.FuncOf(sayHello))
 	js.Global().Set("start_spin", js.FuncOf(startSpin))
 	js.Global().Set("stop_spin", js.FuncOf(stopSpin))
+	js.Global().Set("add_num", js.FuncOf(add))
+	js.Global().Set("wasm", js.ValueOf(map[string]interface{}{
+		"say_hello":  js.FuncOf(sayHello),
+		"start_spin": js.FuncOf(startSpin),
+		"stop_spin":  js.FuncOf(stopSpin),
+		"add_num":    js.FuncOf(add),
+	}))
 }
-
 func main() {
+	mainCtx, mainExit = context.WithCancel(context.Background())
 	fmt.Println("Args = ", os.Args)
-	setGlobalMethods()
-	quit := make(chan struct{})
+	fmt.Println("Env = ", os.Environ())
 
 	exitButton := getElementByID("exitButton")
 	startButton := getElementByID("startButton")
@@ -87,7 +112,7 @@ func main() {
 		exitButton.Set("disabled", true)
 		//// Situation 2
 		// runButton.Set("disabled", false)
-		quit <- struct{}{}
+		mainExit()
 		return nil
 	}))
 	exitButton.Set("disabled", false)
@@ -111,6 +136,6 @@ func main() {
 	}))
 
 	fmt.Println("App is ready go.")
-	<-quit
+	<-mainCtx.Done()
 	fmt.Println("App exit.")
 }
