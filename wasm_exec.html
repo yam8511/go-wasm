@@ -18,7 +18,7 @@ license that can be found in the LICENSE file.
 	(see https://caniuse.com/#feat=textencoder)
 	-->
 	<input type="text" value="10" id="score">
-	<button onClick="run()" id="runButton" disabled>Run</button>
+	<button onClick="run()" id="runButton">Run</button>
 	<button id="exitButton" disabled>Exit</button>
 	<button id="startButton" disabled hidden>Start</button>
 	<button id="stopButton" disabled hidden>Stop</button>
@@ -32,44 +32,28 @@ license that can be found in the LICENSE file.
 			};
 		}
 
-		const go = new Go();
-		let mod;
-		let count = 0;
-		//// Situation 1
-		WebAssembly.instantiateStreaming(fetch("test.wasm"), go.importObject).then(async (result) => {
-			mod = result.module;
-			// inst = result.instance;
-			// inst = await WebAssembly.instantiate(mod, go.importObject); // reset instance
-			document.getElementById("runButton").disabled = false;
-		}).catch((err) => {
-			console.error(err);
-		});
+		let wasm_bin = new ArrayBuffer()
+
+		async function download_wasm() {
+			let bin = await fetch("test.wasm").then(res => res.arrayBuffer())
+			wasm_bin = bin
+		}
 
 		async function run() {
-			count++
+			const go = new Go();
+
+			const { instance } = await WebAssembly.instantiate(wasm_bin, go.importObject)
 			document.getElementById("runButton").disabled = true;
-			console.warn("==== go run ====", count)
-			let inst = await WebAssembly.instantiate(mod, go.importObject); // reset instance
-			await go.run(inst);
-			console.warn("==== go reset ====", count)
+			console.warn("==== go run ====")
+			go.argv = ['hello', 'world']
+			await go.run(instance);
+			console.warn("==== go exit ====")
 			document.getElementById("runButton").disabled = false;
 		}
 
-		//// Situation 2
-		// WebAssembly.instantiateStreaming(fetch("test.wasm"), go.importObject).then(async (result) => {
-		// 	mod = result.module;
-		// 	document.getElementById('runButton').hidden = false
-		// 	// inst = result.instance;
-		// 	// inst = await WebAssembly.instantiate(mod, go.importObject); // reset instance
-		// 	run()
-		// }).catch((err) => {
-		// 	console.error(err);
-		// });
-
-		// run = async () => {
-		// 	let inst = await WebAssembly.instantiate(mod, go.importObject); // reset instance
-		// 	await go.run(inst);
-		// }
+		window.onload = async function () {
+			await download_wasm()
+		}
 	</script>
 </body>
 
