@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"syscall/js"
 	"time"
 )
@@ -13,8 +12,8 @@ func getElementByID(id string) js.Value {
 	return js.Global().Get("document").Call("getElementById", id)
 }
 
-var ctx context.Context
-var stop context.CancelFunc
+var mainCtx, ctx context.Context
+var mainExit, stop context.CancelFunc
 
 func startSpin(this js.Value, args []js.Value) interface{} {
 	if ctx != nil {
@@ -23,7 +22,7 @@ func startSpin(this js.Value, args []js.Value) interface{} {
 
 	go func() {
 		log.Println("開始每秒spin")
-		ctx, stop = context.WithCancel(context.Background())
+		ctx, stop = context.WithCancel(mainCtx)
 		count := 0
 		for {
 			count++
@@ -62,10 +61,13 @@ func setGlobalMethods() {
 	js.Global().Set("stop_spin", js.FuncOf(stopSpin))
 }
 
-func main() {
-	fmt.Println("Args = ", os.Args)
+func init() {
+	fmt.Println("Init Global")
 	setGlobalMethods()
-	quit := make(chan struct{})
+}
+
+func main() {
+	mainCtx, mainExit = context.WithCancel(context.Background())
 
 	exitButton := getElementByID("exitButton")
 	startButton := getElementByID("startButton")
@@ -87,7 +89,7 @@ func main() {
 		exitButton.Set("disabled", true)
 		//// Situation 2
 		// runButton.Set("disabled", false)
-		quit <- struct{}{}
+		mainExit()
 		return nil
 	}))
 	exitButton.Set("disabled", false)
@@ -111,6 +113,8 @@ func main() {
 	}))
 
 	fmt.Println("App is ready go.")
-	<-quit
+	<-mainCtx.Done()
 	fmt.Println("App exit.")
+
+	time.Sleep(time.Second)
 }
